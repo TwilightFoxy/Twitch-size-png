@@ -1,8 +1,7 @@
+import io
 import os
 import sys
 from PIL import Image, ImageOps
-import io
-
 
 def create_resized_images(input_path):
     try:
@@ -19,23 +18,17 @@ def create_resized_images(input_path):
         os.makedirs(output_folder, exist_ok=True)
 
         for size in sizes:
-            resized_img = img.resize(size, Image.Resampling.LANCZOS)
+            resized_img = img.resize((int(size[0]*0.8), int(size[1]*0.8)), Image.Resampling.LANCZOS)
+            new_img = Image.new("RGBA", size, (255, 255, 255, 0))  # Создаем новое изображение с пустым фоном
+            offset = ((size[0] - resized_img.size[0]) // 2, (size[1] - resized_img.size[1]) // 2)
+            new_img.paste(resized_img, offset)
+
             png_output_path = os.path.join(output_folder, f"{file_name}_{size[0]}x{size[1]}.png")
 
-            # Установка DPI для уменьшения размера файла
-            resized_img = ImageOps.exif_transpose(resized_img)
-            resized_img.info['dpi'] = (72, 72)
-
-            # Проверка размера файла и сжатие, если размер больше 25 КБ
+            # Попробуем сохранить как PNG с минимальными размерами
             buffer = io.BytesIO()
-            compress_level = 9  # Начальное значение уровня сжатия
-            resized_img.save(buffer, format='PNG', dpi=(72, 72), compress_level=compress_level, optimize=True)
+            new_img.save(buffer, format='PNG', optimize=True)
             file_size = buffer.tell()
-            while file_size > 25 * 1024 and compress_level > 1:
-                buffer.seek(0)
-                compress_level -= 1
-                resized_img.save(buffer, format='PNG', dpi=(72, 72), compress_level=compress_level, optimize=True)
-                file_size = buffer.tell()
 
             with open(png_output_path, 'wb') as f:
                 f.write(buffer.getvalue())
@@ -45,14 +38,14 @@ def create_resized_images(input_path):
             # Если PNG размер все еще больше 25 КБ, сохраняем как JPEG
             if file_size > 25 * 1024:
                 jpeg_output_path = os.path.join(output_folder, f"{file_name}_{size[0]}x{size[1]}.jpg")
-                buffer.seek(0)
                 quality = 85
-                resized_img.convert('RGB').save(buffer, format='JPEG', dpi=(72, 72), quality=quality)
+                buffer.seek(0)
+                new_img.convert('RGB').save(buffer, format='JPEG', quality=quality)
                 file_size = buffer.tell()
                 while file_size > 25 * 1024 and quality > 10:
                     buffer.seek(0)
                     quality -= 5
-                    resized_img.convert('RGB').save(buffer, format='JPEG', dpi=(72, 72), quality=quality)
+                    new_img.convert('RGB').save(buffer, format='JPEG', quality=quality)
                     file_size = buffer.tell()
 
                 with open(jpeg_output_path, 'wb') as f:
@@ -63,7 +56,6 @@ def create_resized_images(input_path):
         print("Все изображения созданы успешно.")
     except Exception as e:
         print(f"Ошибка: {e}")
-
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
